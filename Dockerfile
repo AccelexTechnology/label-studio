@@ -15,10 +15,6 @@ RUN set -eux; \
 RUN python3.8 -m pip install --upgrade pip
 RUN pip3 install uwsgi
 
-# Copy and install requirements.txt first for caching
-COPY deploy/requirements.txt /label-studio
-RUN pip3 install -r /label-studio/requirements.txt
-
 # Build python wheel for label-studio
 ARG app_name=label_studio
 ARG app_version=1.4
