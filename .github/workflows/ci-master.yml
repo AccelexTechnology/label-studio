@@ -11,6 +11,9 @@ jobs:
       ecr_repository: "536930143272.dkr.ecr.eu-west-1.amazonaws.com/acx-label-studio"
     steps:
 
+      - name: Checkout code
+        uses: actions/checkout@v2
+
       - name: Get docker tag, image name and sets flag
         run: |
           echo "DOCKER_IMAGE=${ecr_repository}:${GITHUB_SHA}" >> $GITHUB_ENV
