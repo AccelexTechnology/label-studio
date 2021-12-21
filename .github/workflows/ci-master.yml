@@ -20,6 +20,10 @@ jobs:
         with:
           python-version: 3.8
 
+      - name: Install dependencies
+        run: |
+          python3.8 -m pip install label-studio
+
       - name: Collect Django static files
         run: |
           cd label_studio
