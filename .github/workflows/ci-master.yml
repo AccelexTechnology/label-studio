@@ -23,9 +23,6 @@ jobs:
         with:
           python-version: 3.8
 
-      - name: Setup tmate session
-        uses: mxschmitt/action-tmate@v3
-
       - name: Install dependencies
         run: |
           python3.8 -m pip install label-studio
@@ -50,7 +47,7 @@ jobs:
         working-directory: ${{matrix.app_build_config.git_dir_path}}
         run: |
           aws ecr get-login --no-include-email --region eu-west-1
-          DOCKER_BUILDKIT=1 docker build --quiet -f Dockerfile -t "${DOCKER_IMAGE}" .
+          docker build --quiet -f Dockerfile -t "${DOCKER_IMAGE}" .
           docker tag "${DOCKER_IMAGE}" "${ecr_repository}:latest"
           docker push "${DOCKER_IMAGE}"
           docker push "${ecr_repository}:latest"
