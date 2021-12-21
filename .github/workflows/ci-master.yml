@@ -1,0 +1,96 @@
+name: ci-master
+on: 
+  push:
+    branches:
+      - master
+
+jobs:
+  build:
+    runs-on: ubuntu-20.04
+    env:
+      ecr_repository: "536930143272.dkr.ecr.eu-west-1.amazonaws.com/acx-label-studio"
+    steps:
+
+      - name: Get docker tag, image name and sets flag
+        run: |
+          echo "DOCKER_IMAGE=${ecr_repository}:${GITHUB_SHA}" >> $GITHUB_ENV
+
+      - name: Set up Python 3.8
+        uses: actions/setup-python@v2
+        with:
+          python-version: 3.8
+
+      - name: Collect Django static files
+        run: |
+          cd label_studio
+          python3.8 manage.py collectstatic
+
+      - name: Create python project wheel
+        run: |
+          python3.8 setup.py sdist bdist_wheel
+
+      - name: Configure AWS credentials from ecr.repository account
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ECR }}
+          aws-secret-access-key: ${{ secrets.AWS_ACCESS_SECRET_KEY_ECR }}
+          aws-region: eu-west-1
+
+      - name: Build and push docker image
+        working-directory: ${{matrix.app_build_config.git_dir_path}}
+        run: |
+          aws ecr get-login --no-include-email --region eu-west-1
+          DOCKER_BUILDKIT=1 docker build --quiet -f Dockerfile -t "${DOCKER_IMAGE}" .
+          docker tag "${DOCKER_IMAGE}" "${ecr_repository}:latest"
+          docker push "${DOCKER_IMAGE}"
+          docker push "${ecr_repository}:latest"
+
+      - name: MSTeams Failure Notification
+        uses: skitionek/notify-microsoft-teams@master
+        if: failure()
+        with:
+          webhook_url: ${{ secrets.MSTEAMS_WEBHOOK }}
+          job: ${{ toJson(job) }}
+
+    outputs:
+      docker_image: ${{ env.DOCKER_IMAGE }}
+
+  push:
+    runs-on: ubuntu-18.04
+    needs: build
+    steps:
+
+      - name: Get docker image prefix
+        run: |
+          docker_image=${{ needs.build.outputs.docker_image }}
+          echo "DOCKER_IMAGE=${docker_image}" >> $GITHUB_ENV
+
+      - name: Checkout acx-infra-k8s-envs
+        uses: actions/checkout@v2
+        with:
+          repository: AccelexTechnology/acx-infra-k8s-envs
+          ref: develop
+          path: acx-infra-k8s-envs
+          token: ${{ secrets.PAT }}
+
+      - name: Get Kustomize
+        uses: imranismail/setup-kustomize@v1
+        with:
+          kustomize-version: ">=4.3.0"
+
+      - name: Commit and push Kustomize changes
+        run: |
+          cd ./acx-infra-k8s-envs/label-studio/ns-label-studio/
+          kustomize edit set image ${DOCKER_IMAGE}
+          git config --global user.email "acx-automation@accelextech.com"
+          git config --global user.name "acx-automation"
+          git add kustomization.yml deployment.yml
+          git commit -m "[label-studio] Update label-studio image"
+          git push origin
+
+      - name: MSTeams Failure Notification
+        uses: skitionek/notify-microsoft-teams@master
+        if: failure()
+        with:
+          webhook_url: ${{ secrets.MSTEAMS_WEBHOOK }}
+          job: ${{ toJson(job) }}
